@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -34,6 +35,7 @@ type HorseInformation struct {
 
 // レース情報構造体
 type RaceInformation struct {
+	Id        int                `json:"id"`
 	RaceText  string             `json:"racetext"`
 	HorseData []HorseInformation `json:"horsedata"`
 }
@@ -88,6 +90,7 @@ func checkOneRace(url string) RaceInformation {
 		})
 	*/
 
+	var raceId int
 	var raceInformationText string
 	// レース詳細
 	c.OnHTML(".RaceData01", func(e *colly.HTMLElement) {
@@ -102,9 +105,11 @@ func checkOneRace(url string) RaceInformation {
 		raceInformationText = strings.ReplaceAll(raceInformationText, " ", "")
 		raceInformationText = strings.ReplaceAll(raceInformationText, "\n", "")
 		raceInformationText, _ = convert.EucjpToUtf8(raceInformationText)
+		temp := strings.ReplaceAll(e.Text, "\n", "")
+		temp = strings.ReplaceAll(temp, "R", "")
+		raceId, _ = strconv.Atoi(temp)
 	})
 
-	var retValue RaceInformation
 	var applicable []HorseInformation
 	horseNumber := 0
 	// Extract class="Horse_Info"
@@ -163,10 +168,12 @@ func checkOneRace(url string) RaceInformation {
 		i++
 		jockeyName := e.ChildText("a")
 		if jockeyName != "" && len(jockeyName) > 0 {
-			// 馬番が該当馬になっているか
-			for _, data := range applicable {
-				if data.Id == i {
-					data.JockeyName, _ = convert.EucjpToUtf8(jockeyName)
+			// 馬番が該当馬になっているか(rangeで行うと代入ができない)
+			//for _, data := range applicable {
+			for j := 0; j < len(applicable); j++ {
+				if applicable[j].Id == i {
+					applicable[j].JockeyName, _ = convert.EucjpToUtf8(jockeyName)
+					break
 				}
 			}
 		}
@@ -175,6 +182,8 @@ func checkOneRace(url string) RaceInformation {
 	// Start scraping on https://XXX
 	c.Visit(url)
 
+	var retValue RaceInformation
+	retValue.Id = raceId
 	retValue.RaceText = raceInformationText
 	retValue.HorseData = applicable
 	return retValue
@@ -185,8 +194,13 @@ func checkJraEntries(ctx context.Context, request events.APIGatewayProxyRequest)
 	jsonLogger.Info("checkJraEntries")
 
 	req, errPost := convertPostDataToStruct(request.Body)
-	//var req Request
-	//var errPost error
+	// lambdaテスト用
+	/*
+		var req Request
+		var errPost error
+		req.Action = "Program"
+		req.RaceId = "2024080504"
+	*/
 	if errPost != nil {
 		slog.Error("Convert Post Failed")
 		jsonLogger.Error("Convert Post Failed", slog.String("error", errPost.Error()))
