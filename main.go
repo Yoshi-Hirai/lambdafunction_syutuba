@@ -31,6 +31,7 @@ type HorseInformation struct {
 	StallionName string `json:"stallionname"`
 	BnsName      string `json:"bnsname"`
 	JockeyName   string `json:"jockeyname"`
+	Optimal      bool   `json:"optimal"`
 }
 
 // レース情報構造体
@@ -42,9 +43,20 @@ type RaceInformation struct {
 
 // レスポンス構造体
 type CheckEntriesResponse struct {
-	//	RaceText  string             `json:"racetext"`
-	//	HorseData []HorseInformation `json:"horsedata"`
 	RaceData []RaceInformation `json:"racedata"`
+}
+
+// 種牡馬適条件構造体
+const (
+	Turf = string("Turf")
+	Dirt = string("Dirt")
+	Both = string("Both")
+)
+
+type StallionOptimalConditions struct {
+	Type      string // 芝 or ダ
+	UnderDist int    // 距離下限
+	UpperDist int    // 距離上限
 }
 
 // ---- Global Variable
@@ -56,6 +68,13 @@ var checkStallion = []string{
 	"ホッコータルマエ",
 	"マクフィ",
 	"グレーターロンドン",
+}
+
+var checkStallionOptimal = map[string]StallionOptimalConditions{
+	"パイロ":       {Dirt, 1400, 3200}, // パイロ ダート1400-3200
+	"ホッコータルマエ":  {Dirt, 1600, 3200}, // ホッコータルマエ ダート1400-3200
+	"マクフィ":      {Both, 1000, 1400}, // マクフィ 両1000-1400
+	"グレーターロンドン": {Both, 1000, 3200}, // グレーターロンドン
 }
 
 // ---- public function ----
@@ -92,9 +111,19 @@ func checkOneRace(url string) RaceInformation {
 
 	var raceId int
 	var raceInformationText string
+	var raceType string
+	var raceDist int
 	// レース詳細
 	c.OnHTML(".RaceData01", func(e *colly.HTMLElement) {
 		raceInformationText = e.ChildText("span")
+		var str = e.ChildText("span")
+		str, _ = convert.EucjpToUtf8(str) // レース条件をUTF8化
+		if strings.Contains(str, "芝") {
+			raceType = Turf
+		} else {
+			raceType = Dirt
+		}
+		raceDist = int(convert.ExtractInt64(str))
 	})
 
 	c.OnHTML(".RaceName", func(e *colly.HTMLElement) {
@@ -136,6 +165,13 @@ func checkOneRace(url string) RaceInformation {
 					single.StallionName = stallionName
 					single.HorseName, _ = convert.EucjpToUtf8(horseName)
 					single.BnsName, _ = convert.EucjpToUtf8(bmsName)
+					// 適条件チェック
+					single.Optimal = false
+					if checkStallionOptimal[stallionName].Type == Both || checkStallionOptimal[stallionName].Type == raceType {
+						if checkStallionOptimal[stallionName].UnderDist <= raceDist && raceDist <= checkStallionOptimal[stallionName].UpperDist {
+							single.Optimal = true
+						}
+					}
 					applicable = append(applicable, single)
 					break
 				}
