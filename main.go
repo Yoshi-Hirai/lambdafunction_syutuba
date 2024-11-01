@@ -113,6 +113,7 @@ func checkOneRace(url string) RaceInformation {
 	var raceInformationText string
 	var raceType string
 	var raceDist int
+	var jumpRace bool = false
 	// レース詳細
 	c.OnHTML(".RaceData01", func(e *colly.HTMLElement) {
 		raceInformationText = e.ChildText("span")
@@ -122,6 +123,9 @@ func checkOneRace(url string) RaceInformation {
 			raceType = Turf
 		} else {
 			raceType = Dirt
+		}
+		if strings.Contains(str, "障") {
+			jumpRace = true
 		}
 		raceDist = int(convert.ExtractInt64(str))
 	})
@@ -221,7 +225,9 @@ func checkOneRace(url string) RaceInformation {
 	var retValue RaceInformation
 	retValue.Id = raceId
 	retValue.RaceText = raceInformationText
-	retValue.HorseData = applicable
+	if jumpRace != true {
+		retValue.HorseData = applicable
+	}
 	return retValue
 }
 
